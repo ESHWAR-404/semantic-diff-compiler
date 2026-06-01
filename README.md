@@ -142,6 +142,12 @@ options:
 
 ---
 
+## Video Demo for Test Case 1
+
+Example video of how to setup the python venv and run the test cases to generate report
+
+---
+
 ## Running All Tests at Once
 
 ```bash
