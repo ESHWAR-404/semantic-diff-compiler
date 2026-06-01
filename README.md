@@ -159,6 +159,12 @@ options:
 
 ---
 
+## Video Demo
+
+Example video of how to set up the Python venv and run the test cases to generate a report.
+
+---
+
 ## Evaluation Results
 
 | Metric | Result |
