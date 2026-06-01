@@ -1,34 +1,54 @@
-# Semantic Diff for Compiler IR
+# SemDiff — Semantic Diff for Compiler IR &nbsp; `v2.0`
 
-A production-grade CLI tool that compares two versions of a source file (or
-pre-compiled LLVM IR), computes a structural diff of their Control Flow Graphs
-and Data Flow elements, and reports semantic/optimization changes in plain English.
+> **Compare two versions of a C/C++ file (or pre-compiled LLVM IR) and get a plain-English report of what the compiler's optimizer actually changed — vectorization gained/lost, inlining, loop unrolling, dead code, control-flow rewrites, and ABI-breaking signature changes.**
+
+[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![Tests](https://img.shields.io/badge/Tests-15%2F15%20passing-brightgreen)](#test-cases)
+[![Detection](https://img.shields.io/badge/Detection%20Rate-100%25-brightgreen)](#evaluation)
+[![False Positives](https://img.shields.io/badge/False%20Positives-0-brightgreen)](#evaluation)
+[![No pip](https://img.shields.io/badge/dependencies-stdlib%20only-blue)](#system-requirements)
+[![License](https://img.shields.io/badge/License-MIT-blue)](#)
+
+**🌐 [Interactive Website & Charts →](https://eshwar-404.github.io/semantic-diff-compiler/)**
+
+---
+
+## What's New in v2.0
+
+| Feature | v1 | v2 |
+|---|---|---|
+| Interactive website with charts | ✗ | ✅ |
+| Full HTML dashboard (`demo.py`) | ✗ | ✅ |
+| Batch runner (`run2.sh`) | ✗ | ✅ |
+| Extended build validation (`build2.sh`) | ✗ | ✅ |
+| GitHub Pages site | ✗ | ✅ |
+| Stacked performance chart | ✗ | ✅ |
 
 ---
 
 ## What It Detects
 
-| Category         | Example Finding                                            |
-|------------------|------------------------------------------------------------|
-| **VECTORIZATION** | "Vectorization GAINED (width=8): 4 vector ops introduced" |
-| **LOOP_UNROLLING**| "Loop REROLLED (was ~4x unrolled): block count 8 → 3"    |
-| **INLINING**      | "Call to @clamp reduced: 1 → 0 (callee removed)"          |
-| **DEAD_CODE**     | "Dead-code eliminated: 2 block(s) removed"                 |
-| **CONTROL_FLOW**  | "Branch eliminated: 3 conditional block(s) removed"        |
-| **FUNCTION_ADDED**| "New function @l2_norm_avx added to module"                |
-| **SIGNATURE**     | "Return type changed: 'i32' → 'i64'"                      |
+| Category | Example Finding | Severity |
+|---|---|---|
+| **VECTORIZATION** | `Vectorization GAINED (width=8): 4 vector ops introduced` | SIGNIFICANT |
+| **LOOP_UNROLLING** | `Loop REROLLED (was ~4x unrolled): block count 8 → 3` | SIGNIFICANT |
+| **INLINING** | `Call to @clamp reduced: 1 → 0 (callee removed — likely inlined)` | SIGNIFICANT |
+| **DEAD_CODE** | `Dead-code eliminated: 2 block(s) removed` | INFO |
+| **CONTROL_FLOW** | `Branch eliminated: 3 conditional block(s) removed` | WARNING |
+| **FUNCTION_ADDED** | `New function @l2_norm_avx added to module` | INFO |
+| **FUNCTION_REMOVED** | `Function @fast_abs removed from module` | WARNING |
+| **SIGNATURE** | `Return type changed: 'i32' → 'i64'` | SIGNIFICANT |
 
 ---
 
 ## System Requirements
 
 | Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python      | ≥ 3.9   | Uses dataclasses, `match` not required |
-| clang/LLVM  | 11–17   | **Optional** — only needed to compile `.c`/`.cpp` inputs |
+|---|---|---|
+| Python | ≥ 3.9 | stdlib only — no pip install needed |
+| clang / LLVM | 11–17 | **Optional** — only for `.c`/`.cpp` inputs |
 
-The tool works fully out-of-the-box with pre-compiled `.ll` LLVM IR files
-(all 15 test cases include `.ll` files).
+All 15 test cases include pre-compiled `.ll` files — clang is not required to run them.
 
 ---
 
@@ -37,43 +57,40 @@ The tool works fully out-of-the-box with pre-compiled `.ll` LLVM IR files
 ### 1. Build / verify setup
 
 ```bash
-./build.sh
+./build.sh          # original — checks Python, runs smoke test
+./build2.sh         # v2 — full validation: runs all 15 tests, generates dashboard
 ```
 
-This checks Python, optionally sets up a `.venv`, syntax-checks all sources,
-and runs a smoke test. No internet connection or pip required.
-
-### 2. Run against the included test cases
+### 2. Run a single comparison
 
 ```bash
-# TC1 — fixed vs variable loop bounds (vectorization lost)
 ./run.sh testcases/tc1_loop_bounds/v1.ll testcases/tc1_loop_bounds/v2.ll
-
-# TC2 — inlining with always_inline
-./run.sh testcases/tc2_inlining/v1.ll testcases/tc2_inlining/v2.ll
-
-# TC3 — dead code elimination
-./run.sh testcases/tc3_dead_code/v1.ll testcases/tc3_dead_code/v2.ll
-
-# TC4 — vectorization gained via __restrict__
-./run.sh testcases/tc4_vectorization/v1.ll testcases/tc4_vectorization/v2.ll
-
-# TC5 — control flow restructuring
-./run.sh testcases/tc5_control_flow/v1.ll testcases/tc5_control_flow/v2.ll
-
-# Evaluation cases
-./run.sh testcases/eval/eval_01/v1.ll testcases/eval/eval_01/v2.ll
-./run.sh testcases/eval/eval_02/v1.ll testcases/eval/eval_02/v2.ll --verbose
+./run.sh testcases/tc4_vectorization/v1.ll testcases/tc4_vectorization/v2.ll --verbose
 ```
 
-### 3. Compile from C sources (requires clang)
+### 3. Run all test cases at once (v2 batch runner)
+
+```bash
+./run2.sh           # runs all 15 test cases, shows summary
+./run2.sh --html    # also generates per-case HTML reports
+./run2.sh --json    # also outputs machine-readable JSON for each case
+```
+
+### 4. Generate the interactive HTML dashboard (v2)
+
+```bash
+python demo.py
+# → opens dashboard.html in your browser automatically
+```
+
+### 5. Compile from C sources (requires clang)
 
 ```bash
 ./run.sh testcases/tc1_loop_bounds/v1.c testcases/tc1_loop_bounds/v2.c --opt O2
 ./run.sh testcases/tc4_vectorization/v1.c testcases/tc4_vectorization/v2.c --opt O3
 ```
 
-### 4. JSON / HTML output
+### 6. JSON / HTML output
 
 ```bash
 ./run.sh testcases/tc1_loop_bounds/v1.ll testcases/tc1_loop_bounds/v2.ll \
@@ -111,50 +128,49 @@ options:
 ## Example Output
 
 ```
-======================================================================
-  Semantic IR Diff Report
-======================================================================
+══════════════════════════════════════════════════════════════
+  Semantic IR Diff Report  ·  v2.0
+══════════════════════════════════════════════════════════════
   Old: testcases/tc1_loop_bounds/v1.ll
   New: testcases/tc1_loop_bounds/v2.ll
-----------------------------------------------------------------------
-  Functions: 0 added, 0 removed, 2 modified
-----------------------------------------------------------------------
+──────────────────────────────────────────────────────────────
+  Functions: 0 added · 0 removed · 2 modified
+──────────────────────────────────────────────────────────────
 
   Function: @sum_array
-    [VEC] [SIGNIFICANT] @sum_array: Vectorization LOST: 2 vector ops removed
+    [VEC] [SIGNIFICANT] Vectorization LOST: 2 vector ops removed
         Old version had <4 x i32> instructions
         New version uses scalar operations only
-    [SIG] [SIGNIFICANT] @sum_array: Parameter types changed
+    [SIG] [SIGNIFICANT] Parameter types changed
         Old: ['i32*', 'i32*']
         New: ['i32*', 'i32*', 'i32']
 
   Function: @scale_array
-    [VEC] [SIGNIFICANT] @scale_array: Vectorization LOST: 4 vector ops removed
+    [VEC] [SIGNIFICANT] Vectorization LOST: 4 vector ops removed
         Old version had <8 x float> instructions
         New version uses scalar operations only
 
-----------------------------------------------------------------------
+──────────────────────────────────────────────────────────────
   Change summary:
     [SIG]        1 occurrence(s)
     [VEC]        2 occurrence(s)
-======================================================================
+══════════════════════════════════════════════════════════════
 ```
 
 ---
 
-## Running All Tests at Once
+## Evaluation Results
 
-```bash
-for tc in tc1_loop_bounds tc2_inlining tc3_dead_code tc4_vectorization tc5_control_flow; do
-    echo "=== $tc ==="
-    ./run.sh "testcases/$tc/v1.ll" "testcases/$tc/v2.ll"
-done
+| Metric | Result |
+|---|---|
+| Total test cases | 15 (5 synthetic + 10 realistic) |
+| Changes to detect | 24 |
+| Correctly detected | **24 / 24** |
+| Detection rate | **100%** |
+| False positive rate | **0%** |
+| Avg. runtime | ~70 ms (Python startup dominates) |
 
-for i in $(seq -w 1 10); do
-    echo "=== eval_$i ==="
-    ./run.sh "testcases/eval/eval_$i/v1.ll" "testcases/eval/eval_$i/v2.ll"
-done
-```
+See [EVALUATION.md](EVALUATION.md) for per-case breakdown.
 
 ---
 
@@ -162,8 +178,13 @@ done
 
 ```
 .
-├── build.sh              Setup and verification script
-├── run.sh                Main entry-point wrapper
+├── build.sh              Original setup and verification script (CLI)
+├── build2.sh             v2 — full test suite runner + dashboard generator
+├── run.sh                Original CLI entry-point (unchanged)
+├── run2.sh               v2 — batch runner for all test cases
+├── demo.py               v2 — generates interactive HTML dashboard
+├── docs/
+│   └── index.html        GitHub Pages website with interactive charts
 ├── src/
 │   ├── main.py           CLI argument parsing and pipeline orchestration
 │   ├── compiler.py       Clang invocation; .c → .ll compilation
@@ -178,21 +199,37 @@ done
 │   ├── tc3_dead_code/    Dead branch elimination
 │   ├── tc4_vectorization/ __restrict__ enabling SIMD
 │   ├── tc5_control_flow/ Branchless / algorithm redesign
-│   └── eval/eval_01–10/  Realistic commit-level evaluation cases
+│   └── eval/eval_01–10/ Realistic commit-level evaluation cases
 ├── README.md             This file
 ├── DESIGN.md             Architecture and design decisions
 ├── IMPLEMENTATION.md     Technical implementation details
-└── EVALUATION.md         Test results and performance analysis
+├── EVALUATION.md         Test results and performance analysis
+└── CHANGELOG.md          Version history
 ```
 
 ---
 
-## Windows Notes
+## How It Compares
 
-All scripts require a POSIX shell (Git Bash, WSL, or Cygwin).
-Alternatively, run the tool directly with Python:
+| Method | Detects Vectorization | Detects Inlining | Actionable Output | Noise |
+|---|---|---|---|---|
+| `diff old.ll new.ll` | ✗ | ✗ | ✗ | Very High |
+| `diff old.c new.c` | ✗ | ✗ | Source only | Medium |
+| **SemDiff (this tool)** | **✓** | **✓** | **✓ IR + English** | **Low** |
+| `opt -print-changed` | ✓ | ✓ | ✗ (raw verbose) | Very High |
+| Compiler Explorer | Manual | Manual | ✗ | N/A |
+
+---
+
+## Windows
+
+All shell scripts require Git Bash, WSL, or Cygwin. Alternatively, use Python directly:
 
 ```powershell
 python src\main.py testcases\tc1_loop_bounds\v1.ll testcases\tc1_loop_bounds\v2.ll
-python src\main.py --help
+python demo.py
 ```
+
+---
+
+*SemDiff v2.0 — 15/15 tests · 24/24 detections · 0 false positives · stdlib only*

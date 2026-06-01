@@ -1,4 +1,4 @@
-# Implementation Reference — Semantic Diff for Compiler IR
+# Implementation Reference — Semantic Diff for Compiler IR &nbsp; `v2.0`
 
 ## 1. LLVM IR Grammar Subset (Implemented)
 
@@ -310,3 +310,48 @@ This ensures the most important changes appear first in the report.
 The dominant cost is Python startup + file I/O, not the algorithm itself.
 For production use with very large IR files (generated code, link-time IR),
 a C extension or Rust port of the parser would be appropriate.
+
+---
+
+## 9. v2.0 Additions
+
+### 9.1 Dashboard Generator (`demo.py`)
+
+`demo.py` drives the tool as a subprocess for all 15 test cases and aggregates
+results into a single self-contained HTML file with embedded Chart.js graphs.
+
+Key implementation notes:
+
+- Runs each test case **twice** — once with `--format text` (for display) and once
+  with `--format json` (for structured data extraction). The JSON path allows the
+  dashboard to compute per-category totals without screen-scraping.
+- `colorize_text(text)` applies HTML `<span>` tags to known patterns (`[VEC]`,
+  `[SIGNIFICANT]`, etc.) using `html.escape()` first to prevent XSS from file paths.
+- The dashboard is **fully self-contained**: Chart.js is loaded from CDN but all
+  result data is inlined as JSON literals — no server needed, works offline after
+  first load.
+
+### 9.2 Batch Runner (`run2.sh`)
+
+`run2.sh` uses Bash arrays to map labels → v1/v2 paths. Key design choices:
+
+- Uses `grep -c` with `|| true` to count change tags without triggering `set -e`
+  on zero matches.
+- `--filter TAG` uses a secondary `grep -q` on the output before printing, allowing
+  selective display (e.g., `./run2.sh --filter VEC` shows only vectorization cases).
+- `--html` / `--json` modes create a `reports/` directory automatically and write
+  per-case files using slug-ified label names (`tc1__loop_bounds.html`).
+
+### 9.3 GitHub Pages Site (`docs/index.html`)
+
+The site is a single self-contained HTML file with:
+
+- **No build step** — plain HTML + CSS + inline `<script>` blocks
+- **Chart.js 4.4** via CDN for all four interactive graphs
+- **Sticky nav** with `backdrop-filter: blur` for a glass morphism effect
+- **CSS custom properties** (`--bg`, `--accent`, etc.) for a consistent dark theme
+- **Responsive grid** via `repeat(auto-fit, minmax(...))` — works on mobile without
+  media query breakpoints for most components
+- **Terminal mockup** using pure CSS flexbox and a monospace code block — no images
+
+All chart data is hardcoded from the evaluation results (deterministic across runs).

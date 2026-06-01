@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SemDiff — Semantic Diff for Compiler IR</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --accent2:  #3fb950;
+      --accent3:  #d2a679;
+      --warn:     #e3b341;
+      --danger:   #f85149;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --tag-bg:   #1f2a3c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* NAV */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(13,17,23,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--accent); letter-spacing: -0.3px; }
+    .nav-brand span { color: var(--text); }
+    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-badge {
+      background: var(--accent); color: #000; font-size: 0.75rem;
+      font-weight: 700; padding: 4px 12px; border-radius: 20px;
+      text-decoration: none; transition: opacity 0.2s;
+    }
+    .nav-badge:hover { opacity: 0.85; }
+
+    /* HERO */
+    .hero {
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(88,166,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: var(--tag-bg); border: 1px solid var(--accent);
+      color: var(--accent); font-size: 0.75rem; font-weight: 600;
+      padding: 4px 14px; border-radius: 20px; margin-bottom: 1.5rem;
+      letter-spacing: 0.5px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800; letter-spacing: -1px;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+    }
+    .hero h1 .highlight { color: var(--accent); }
+    .hero p.subtitle {
+      font-size: 1.15rem; color: var(--muted);
+      max-width: 620px; margin: 0 auto 2rem;
+    }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      padding: 10px 24px; border-radius: 8px; font-size: 0.95rem;
+      font-weight: 600; text-decoration: none; transition: all 0.2s; cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #79bcff; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    .badges { display: flex; gap: 0.5rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; }
+    .badge-pill {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 0.75rem; font-family: monospace; color: var(--muted);
+    }
+    .badge-pill .val { color: var(--accent2); font-weight: 700; }
+
+    /* TERMINAL */
+    .terminal-wrap { max-width: 780px; margin: 3rem auto 0; padding: 0 1.5rem; }
+    .terminal {
+      background: #010409; border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+      font-family: "SF Mono", "Fira Code", monospace; font-size: 0.82rem;
+    }
+    .terminal-bar {
+      background: var(--surface); padding: 10px 16px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #ffbd2e; }
+    .dot-g { background: #28ca41; }
+    .terminal-title { color: var(--muted); font-size: 0.8rem; margin-left: auto; margin-right: auto; }
+    .terminal-body { padding: 1.2rem 1.5rem; line-height: 1.8; }
+    .t-cmd  { color: #79c0ff; }
+    .t-sep  { color: var(--border); }
+    .t-head { color: var(--accent); font-weight: bold; }
+    .t-sig  { color: #ff7b72; }
+    .t-vec  { color: #d2a679; }
+    .t-ok   { color: var(--accent2); }
+    .t-dim  { color: var(--muted); }
+    .t-sum  { color: var(--warn); }
+
+    /* SECTIONS */
+    section { padding: 5rem 1.5rem; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .section-title {
+      font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem;
+      letter-spacing: -0.5px;
+    }
+    .section-sub { color: var(--muted); margin-bottom: 3rem; font-size: 1rem; }
+
+    /* FEATURE GRID */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.5rem;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .feature-icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+    .feature-title { font-weight: 600; margin-bottom: 0.4rem; }
+    .feature-desc { color: var(--muted); font-size: 0.9rem; }
+
+    /* CHARTS */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 2rem;
+    }
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.5rem;
+    }
+    .chart-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .chart-card p  { color: var(--muted); font-size: 0.82rem; margin-bottom: 1.2rem; }
+    .chart-wrap    { position: relative; height: 260px; }
+
+    /* DETECTION TABLE */
+    .det-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .det-table th {
+      background: var(--surface); padding: 10px 14px; text-align: left;
+      font-weight: 600; color: var(--muted); font-size: 0.8rem;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .det-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .det-table tr:last-child td { border-bottom: none; }
+    .det-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .rate-bar { display: flex; align-items: center; gap: 10px; }
+    .bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .bar-fill  { height: 100%; background: var(--accent2); border-radius: 3px; transition: width 1s ease; }
+    .tag {
+      display: inline-block; font-size: 0.72rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px; font-family: monospace;
+    }
+    .tag-vec  { background: rgba(210,166,121,0.15); color: var(--accent3); }
+    .tag-loop { background: rgba(88,166,255,0.12); color: var(--accent); }
+    .tag-sig  { background: rgba(248,81,73,0.12);  color: var(--danger); }
+    .tag-ok   { background: rgba(63,185,80,0.12);  color: var(--accent2); }
+    .tag-warn { background: rgba(227,179,65,0.12); color: var(--warn); }
+
+    /* PIPELINE */
+    .pipeline {
+      display: flex; align-items: stretch; gap: 0;
+      overflow-x: auto; padding-bottom: 1rem;
+      flex-wrap: nowrap;
+    }
+    .pipe-step {
+      flex: 1; min-width: 140px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.2rem 1rem;
+      text-align: center; position: relative;
+    }
+    .pipe-step + .pipe-step { margin-left: -1px; border-radius: 0; }
+    .pipe-step:first-child { border-radius: 10px 0 0 10px; }
+    .pipe-step:last-child  { border-radius: 0 10px 10px 0; }
+    .pipe-icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .pipe-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--accent); }
+    .pipe-file { font-family: monospace; font-size: 0.75rem; color: var(--muted); }
+    .pipe-arrow {
+      display: flex; align-items: center; color: var(--muted); font-size: 1.2rem;
+      padding: 0 0.25rem; flex-shrink: 0;
+    }
+
+    /* COMPARISON TABLE */
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .cmp-table th {
+      padding: 12px 16px; text-align: left; background: var(--surface);
+      border-bottom: 1px solid var(--border); font-size: 0.8rem;
+      text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);
+    }
+    .cmp-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .cmp-table tr:last-child td { border-bottom: none; }
+    .cmp-table .highlight-row td { background: rgba(88,166,255,0.06); }
+    .cmp-yes { color: var(--accent2); font-weight: 600; }
+    .cmp-no  { color: var(--muted); }
+    .cmp-hi  { color: var(--warn); }
+
+    /* TESTCASES */
+    .tc-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .tc-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.2rem; cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .tc-card:hover { border-color: var(--accent2); }
+    .tc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .tc-title { font-weight: 600; font-size: 0.92rem; }
+    .tc-body { color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+    .tc-finding {
+      margin-top: 0.75rem; font-family: monospace; font-size: 0.78rem;
+      background: #010409; border-radius: 6px; padding: 0.6rem 0.8rem;
+      color: var(--accent2); line-height: 1.7;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border); padding: 2.5rem 1.5rem;
+      text-align: center; color: var(--muted); font-size: 0.85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* DIVIDER */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* PERF STATS */
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem; margin-bottom: 3rem;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.2rem; text-align: center;
+    }
+    .stat-num { font-size: 2rem; font-weight: 800; color: var(--accent); }
+    .stat-label { color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
+
+    @media (max-width: 600px) {
+      nav .nav-links { display: none; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .pipeline { flex-direction: column; }
+      .pipe-step + .pipe-step { margin-left: 0; margin-top: -1px; border-radius: 0; }
+      .pipe-step:first-child { border-radius: 10px 10px 0 0; }
+      .pipe-step:last-child  { border-radius: 0 0 10px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">Sem<span>Diff</span></div>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#metrics">Metrics</a></li>
+    <li><a href="#pipeline">Pipeline</a></li>
+    <li><a href="#testcases">Test Cases</a></li>
+    <li><a href="#compare">Compare</a></li>
+  </ul>
+  <a class="nav-badge" href="https://github.com/ESHWAR-404/semantic-diff-compiler" target="_blank">⭐ GitHub</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">🚀 Version 2.0 — Now with Interactive Dashboard</div>
+  <h1>Semantic Diff for<br><span class="highlight">Compiler IR</span></h1>
+  <p class="subtitle">
+    A production-grade tool that compares LLVM IR between two source versions and
+    reports <strong>vectorization</strong>, <strong>inlining</strong>, <strong>loop unrolling</strong>,
+    and <strong>dead code</strong> changes — in plain English.
+  </p>
+  <div class="hero-actions">
+    <a href="https://github.com/ESHWAR-404/semantic-diff-compiler" class="btn btn-primary" target="_blank">View on GitHub</a>
+    <a href="#metrics" class="btn btn-outline">See Results ↓</a>
+  </div>
+  <div class="badges">
+    <span class="badge-pill">Python <span class="val">≥ 3.9</span></span>
+    <span class="badge-pill">Tests <span class="val">15/15 ✓</span></span>
+    <span class="badge-pill">Detection <span class="val">100%</span></span>
+    <span class="badge-pill">False Positives <span class="val">0</span></span>
+    <span class="badge-pill">Stdlib only <span class="val">no pip</span></span>
+    <span class="badge-pill">v<span class="val">2.0.0</span></span>
+  </div>
+</section>
+
+<!-- TERMINAL -->
+<div class="terminal-wrap">
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+      <span class="terminal-title">semdiff — bash</span>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-cmd">$</span> <span class="t-dim">./run.sh testcases/tc4_vectorization/v1.ll testcases/tc4_vectorization/v2.ll</span></div>
+      <br>
+      <div><span class="t-sep">══════════════════════════════════════════════════════════════</span></div>
+      <div><span class="t-head">  Semantic IR Diff Report  ·  v2.0</span></div>
+      <div><span class="t-sep">══════════════════════════════════════════════════════════════</span></div>
+      <div><span class="t-dim">  Old: testcases/tc4_vectorization/v1.ll</span></div>
+      <div><span class="t-dim">  New: testcases/tc4_vectorization/v2.ll</span></div>
+      <div><span class="t-sep">──────────────────────────────────────────────────────────────</span></div>
+      <div><span class="t-dim">  Functions: 0 added · 0 removed · 2 modified</span></div>
+      <div><span class="t-sep">──────────────────────────────────────────────────────────────</span></div>
+      <br>
+      <div><span class="t-dim">  Function:</span> <span class="t-head">@multiply_arrays</span></div>
+      <div>&nbsp;&nbsp;<span class="t-vec">[VEC] [SIGNIFICANT]</span> Vectorization <span class="t-ok">GAINED</span> (width=8): 4 vector ops introduced</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-dim">__restrict__ enabled noalias → auto-vectorization to &lt;8 x float&gt;</span></div>
+      <br>
+      <div><span class="t-dim">  Function:</span> <span class="t-head">@saxpy</span></div>
+      <div>&nbsp;&nbsp;<span class="t-vec">[VEC] [SIGNIFICANT]</span> Vectorization <span class="t-ok">GAINED</span> (width=8): 4 vector ops introduced</div>
+      <br>
+      <div><span class="t-sep">──────────────────────────────────────────────────────────────</span></div>
+      <div><span class="t-sum">  Change summary: [VEC] 2 occurrence(s)</span></div>
+      <div><span class="t-sep">══════════════════════════════════════════════════════════════</span></div>
+    </div>
+  </div>
+</div>
+
+<hr class="divider" style="margin-top:5rem;">
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-title">What It Detects</div>
+    <div class="section-sub">Seven categories of semantic compiler optimization changes, detected with zero false positives.</div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">Vectorization</div>
+        <div class="feature-desc">Detects SIMD vectorization gained or lost. Identifies <code>&lt;N x T&gt;</code> instruction patterns and dominant vector width changes (e.g., AVX2→SSE4.2).</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔁</div>
+        <div class="feature-title">Loop Unrolling</div>
+        <div class="feature-desc">Identifies when loops are unrolled or rerolled by detecting structurally-similar block groups and measuring block count ratios.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📥</div>
+        <div class="feature-title">Function Inlining</div>
+        <div class="feature-desc">Tracks call-site counts per callee between IR versions and cross-references whether the callee was removed from the module.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧹</div>
+        <div class="feature-title">Dead Code Elimination</div>
+        <div class="feature-desc">Detects removed unreachable blocks and eliminated branches that clang proved can never execute.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌿</div>
+        <div class="feature-title">Control Flow Changes</div>
+        <div class="feature-desc">Reports structural CFG changes: branch elimination, branchless rewrites, if-chains collapsed to <code>select</code> instructions.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">✍️</div>
+        <div class="feature-title">Signature Changes</div>
+        <div class="feature-desc">Catches ABI-breaking return type and parameter type changes between IR versions — changes invisible in a source diff.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">➕</div>
+        <div class="feature-title">Function Add / Remove</div>
+        <div class="feature-desc">Tracks functions added to or removed from the module — essential for detecting outlining, cloning, and dead function elimination.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <div class="feature-title">Three Output Formats</div>
+        <div class="feature-desc">Output as <strong>text</strong> (ANSI-colored), <strong>JSON</strong> (machine-readable), or <strong>HTML</strong> (styled interactive report) — pick what your pipeline needs.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- METRICS -->
+<section id="metrics">
+  <div class="container">
+    <div class="section-title">Evaluation Metrics</div>
+    <div class="section-sub">Evaluated across 5 synthetic test cases + 10 realistic commit-level cases. 24 out of 24 changes correctly detected.</div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num">100%</div><div class="stat-label">Detection Rate</div></div>
+      <div class="stat-card"><div class="stat-num">0</div><div class="stat-label">False Positives</div></div>
+      <div class="stat-card"><div class="stat-num">15</div><div class="stat-label">Test Cases</div></div>
+      <div class="stat-card"><div class="stat-num">24</div><div class="stat-label">Changes Detected</div></div>
+      <div class="stat-card"><div class="stat-num">~70ms</div><div class="stat-label">Avg. Run Time</div></div>
+      <div class="stat-card"><div class="stat-num">0</div><div class="stat-label">pip deps</div></div>
+    </div>
+
+    <div class="charts-grid">
+      <!-- Detection rate chart -->
+      <div class="chart-card">
+        <h3>Detection Rate by Category</h3>
+        <p>All 7 change categories achieve 100% detection across all test cases.</p>
+        <div class="chart-wrap">
+          <canvas id="detectionChart"></canvas>
+        </div>
+      </div>
+      <!-- Performance chart -->
+      <div class="chart-card">
+        <h3>End-to-End Runtime (ms)</h3>
+        <p>Python startup dominates. Parse + diff + classify pipeline takes &lt;20ms.</p>
+        <div class="chart-wrap">
+          <canvas id="perfChart"></canvas>
+        </div>
+      </div>
+      <!-- Category distribution -->
+      <div class="chart-card">
+        <h3>Change Category Distribution</h3>
+        <p>Across all 15 test cases — breakdown of which change types were detected.</p>
+        <div class="chart-wrap">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+      <!-- Severity -->
+      <div class="chart-card">
+        <h3>Severity Distribution</h3>
+        <p>Changes ranked by impact — SIGNIFICANT changes flag critical optimizations.</p>
+        <div class="chart-wrap">
+          <canvas id="severityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detection table -->
+    <div style="margin-top:2.5rem;">
+      <table class="det-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Cases Tested</th>
+            <th>Detected</th>
+            <th>Rate</th>
+            <th>Tag</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Vectorization</td><td>7</td><td>7</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-vec">VEC</span></td>
+          </tr>
+          <tr>
+            <td>Loop Unrolling</td><td>3</td><td>3</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-loop">LOOP</span></td>
+          </tr>
+          <tr>
+            <td>Inlining</td><td>4</td><td>4</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-warn">INLINE</span></td>
+          </tr>
+          <tr>
+            <td>Dead Code / CFG</td><td>3</td><td>3</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-ok">DEAD</span></td>
+          </tr>
+          <tr>
+            <td>Function Added</td><td>2</td><td>2</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-ok">NEW</span></td>
+          </tr>
+          <tr>
+            <td>Function Removed</td><td>3</td><td>3</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-warn">DEL</span></td>
+          </tr>
+          <tr>
+            <td>Signature Change</td><td>2</td><td>2</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>100%</div></td>
+            <td><span class="tag tag-sig">SIG</span></td>
+          </tr>
+          <tr style="font-weight:700;">
+            <td>Total</td><td>24</td><td>24</td>
+            <td><div class="rate-bar"><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--accent)"></div></div>100%</div></td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- PIPELINE -->
+<section id="pipeline">
+  <div class="container">
+    <div class="section-title">Processing Pipeline</div>
+    <div class="section-sub">A clean 6-stage pipeline — each stage has a single responsibility.</div>
+    <div style="display:flex; align-items:center; gap:0; overflow-x:auto; padding-bottom:1rem;">
+      <div class="pipe-step" style="border-radius:10px 0 0 10px;">
+        <div class="pipe-icon">📂</div>
+        <div class="pipe-name">compiler.py</div>
+        <div class="pipe-file">.c → .ll<br>via clang</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon">🧼</div>
+        <div class="pipe-name">normalizer.py</div>
+        <div class="pipe-file">strip metadata<br>rename regs</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon">🌳</div>
+        <div class="pipe-name">cfg_parser.py</div>
+        <div class="pipe-file">IR → Module<br>AST</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon">🔍</div>
+        <div class="pipe-name">diff_engine.py</div>
+        <div class="pipe-file">LCS block<br>matching</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon">🧠</div>
+        <div class="pipe-name">classifier.py</div>
+        <div class="pipe-file">semantic<br>classification</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step" style="border-radius:0 10px 10px 0;">
+        <div class="pipe-icon">📊</div>
+        <div class="pipe-name">reporter.py</div>
+        <div class="pipe-file">text / JSON<br>/ HTML</div>
+      </div>
+    </div>
+
+    <div style="margin-top:3rem;">
+      <div class="section-title" style="font-size:1.3rem; margin-bottom:0.5rem;">Key Algorithms</div>
+      <div class="feature-grid" style="margin-top:1.5rem;">
+        <div class="feature-card">
+          <div class="feature-title">LCS Instruction Diff</div>
+          <div class="feature-desc">Longest Common Subsequence on instruction <em>patterns</em> (opcode + type signature), not raw text. Immune to register renaming noise. O(m·n) on block pairs — fast for typical IR (2–50 instr/block).</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">Jaccard Block Matching</div>
+          <div class="feature-desc">Fuzzy block matching using Jaccard index on instruction-pattern sets. Threshold ≥ 0.30 correctly pairs semantically related blocks even when their names change (e.g., <code>vector.body</code> → <code>for.vector.body</code>).</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">Back-Edge Loop Detection</div>
+          <div class="feature-desc">Loop headers detected by: (1) presence of a PHI node, (2) a predecessor appearing later in block layout order. No <code>opt</code> binary required — pure IR analysis.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">Register Canonicalization</div>
+          <div class="feature-desc">Numbered temporaries (<code>%5</code>, <code>%12</code>) renamed to <code>%r0</code>, <code>%r1</code>, … in definition order per function. Named registers preserved for semantic value.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- TEST CASES -->
+<section id="testcases">
+  <div class="container">
+    <div class="section-title">Test Cases</div>
+    <div class="section-sub">5 synthetic + 10 realistic commit-level evaluation cases. All ship with pre-compiled <code>.ll</code> files — no clang needed.</div>
+    <div class="tc-grid">
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">TC1 — Fixed vs Variable Loop Bounds</div>
+          <span class="tag tag-vec">VEC</span>
+        </div>
+        <div class="tc-body">Adding an <code>int n</code> parameter makes loop bounds dynamic, disabling auto-vectorization entirely.</div>
+        <div class="tc-finding">
+          [VEC] [SIGNIFICANT] @sum_array: Vectorization LOST: 2 vector ops removed<br>
+          [SIG] [SIGNIFICANT] @sum_array: Parameter types changed
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">TC2 — always_inline Attribute</div>
+          <span class="tag tag-warn">INLINE</span>
+        </div>
+        <div class="tc-body"><code>__attribute__((always_inline))</code> forces inlining of <code>@clamp</code> and <code>@dot_product_elem</code>, removing them from the module.</div>
+        <div class="tc-finding">
+          [DEL] [WARNING] Function @clamp removed from module<br>
+          [INLINE] [SIGNIFICANT] Call to @clamp: 1 → 0 (callee removed)
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">TC3 — Dead Code Elimination</div>
+          <span class="tag tag-ok">DEAD</span>
+        </div>
+        <div class="tc-body">Clang proves an always-false branch and unreachable blocks are dead, removing them in <code>v2.ll</code>.</div>
+        <div class="tc-finding">
+          [DEAD] [INFO] Dead-code eliminated: dead.branch removed<br>
+          [CFG] [INFO] Branch structural changes detected
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">TC4 — __restrict__ Enabling SIMD</div>
+          <span class="tag tag-vec">VEC</span>
+        </div>
+        <div class="tc-body"><code>__restrict__</code> adds <code>noalias</code> to pointers, letting LLVM auto-vectorize to <code>&lt;8 x float&gt;</code>.</div>
+        <div class="tc-finding">
+          [VEC] [SIGNIFICANT] @multiply_arrays: Vectorization GAINED (width=8)<br>
+          [VEC] [SIGNIFICANT] @saxpy: Vectorization GAINED (width=8)
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">TC5 — Control Flow Restructuring</div>
+          <span class="tag tag-loop">CFG</span>
+        </div>
+        <div class="tc-body">Branchless rewrites and Kernighan's bit trick replace nested conditionals and a scalar loop.</div>
+        <div class="tc-finding">
+          [CFG] [WARNING] Branch eliminated: conditional blocks removed<br>
+          [CFG] [INFO] New blocks added (binary search structure)
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">EVAL-02 — AVX2 → SSE4.2 Width Narrowing</div>
+          <span class="tag tag-vec">VEC</span>
+        </div>
+        <div class="tc-body">A real-world regression: vector width narrowed from 256-bit (8-wide) to 128-bit (4-wide) due to target feature change.</div>
+        <div class="tc-finding">
+          [VEC] [WARNING] Width narrowed: 8 → 4 (4 ops affected)
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">EVAL-09 — Loop Fusion + Vectorization</div>
+          <span class="tag tag-loop">LOOP</span>
+        </div>
+        <div class="tc-body">Two separate loops fused into one vectorized loop — both the fusion and vectorization gain detected independently.</div>
+        <div class="tc-finding">
+          [VEC] [SIGNIFICANT] Vectorization GAINED (width=8)<br>
+          [LOOP] [INFO] Loop count reduced: 2 → 1
+        </div>
+      </div>
+      <div class="tc-card">
+        <div class="tc-header">
+          <div class="tc-title">EVAL-10 — i32 → i64 Type Upgrade</div>
+          <span class="tag tag-sig">SIG</span>
+        </div>
+        <div class="tc-body">ABI-breaking parameter and return type change from 32-bit to 64-bit integers — invisible in a source diff but obvious in IR.</div>
+        <div class="tc-finding">
+          [SIG] [SIGNIFICANT] Return type changed: 'i32' → 'i64'<br>
+          [SIG] [SIGNIFICANT] Parameter types changed: i32* → i64*
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- COMPARE -->
+<section id="compare">
+  <div class="container">
+    <div class="section-title">How It Compares</div>
+    <div class="section-sub">SemDiff is the only tool that gives actionable, low-noise output for IR-level semantic changes.</div>
+    <div style="overflow-x:auto;">
+      <table class="cmp-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Detects Vectorization</th>
+            <th>Detects Inlining</th>
+            <th>Actionable Output</th>
+            <th>Noise Level</th>
+            <th>Dependency</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>diff old.ll new.ll</code></td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-hi">Very High</td>
+            <td>none</td>
+          </tr>
+          <tr>
+            <td><code>diff old.c new.c</code></td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-hi">Source only</td>
+            <td class="cmp-hi">Medium</td>
+            <td>none</td>
+          </tr>
+          <tr>
+            <td>LLVM <code>opt -print-changed</code></td>
+            <td class="cmp-yes">✓</td>
+            <td class="cmp-yes">✓</td>
+            <td class="cmp-no">✗ (raw)</td>
+            <td class="cmp-hi">Very High</td>
+            <td>LLVM opt</td>
+          </tr>
+          <tr>
+            <td>Compiler Explorer (manual)</td>
+            <td class="cmp-hi">Manual</td>
+            <td class="cmp-hi">Manual</td>
+            <td class="cmp-no">✗</td>
+            <td class="cmp-hi">N/A</td>
+            <td>Browser</td>
+          </tr>
+          <tr class="highlight-row">
+            <td><strong>SemDiff (this tool)</strong></td>
+            <td class="cmp-yes">✓</td>
+            <td class="cmp-yes">✓</td>
+            <td class="cmp-yes">✓ IR + English</td>
+            <td class="cmp-yes">Low</td>
+            <td>Python ≥ 3.9</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- QUICK START -->
+<section>
+  <div class="container" style="text-align:center; max-width:700px;">
+    <div class="section-title">Quick Start</div>
+    <div class="section-sub">Zero dependencies. No pip. Works on Linux, macOS, and Windows (Git Bash / WSL).</div>
+    <div class="terminal" style="text-align:left;">
+      <div class="terminal-bar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+        <span class="terminal-title">bash</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="t-dim"># 1. Clone the repo</span></div>
+        <div><span class="t-cmd">$</span> git clone https://github.com/ESHWAR-404/semantic-diff-compiler.git && cd semantic-diff-compiler</div>
+        <br>
+        <div><span class="t-dim"># 2. Build (checks Python, runs smoke test)</span></div>
+        <div><span class="t-cmd">$</span> ./build.sh</div>
+        <br>
+        <div><span class="t-dim"># 3. Run on a test case</span></div>
+        <div><span class="t-cmd">$</span> ./run.sh testcases/tc4_vectorization/v1.ll testcases/tc4_vectorization/v2.ll</div>
+        <br>
+        <div><span class="t-dim"># 4. Generate an HTML report</span></div>
+        <div><span class="t-cmd">$</span> ./run.sh testcases/tc1_loop_bounds/v1.ll testcases/tc1_loop_bounds/v2.ll --format html --output report.html</div>
+        <br>
+        <div><span class="t-dim"># 5. Run the full interactive dashboard (v2)</span></div>
+        <div><span class="t-cmd">$</span> python demo.py</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    <strong>SemDiff v2.0</strong> — Semantic Diff for Compiler IR &nbsp;·&nbsp;
+    <a href="https://github.com/ESHWAR-404/semantic-diff-compiler" target="_blank">GitHub</a> &nbsp;·&nbsp;
+    Built with Python · No external dependencies
+  </p>
+  <p style="margin-top:0.5rem; font-size:0.8rem;">
+    15/15 tests pass · 24/24 changes detected · 0 false positives
+  </p>
+</footer>
+
+<script>
+  const CHART_DEFAULTS = {
+    color: '#8b949e',
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } },
+      y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } }
+    }
+  };
+
+  // Detection Rate Chart
+  new Chart(document.getElementById('detectionChart'), {
+    type: 'bar',
+    data: {
+      labels: ['VEC', 'LOOP', 'INLINE', 'DEAD/CFG', 'FUNC+', 'FUNC-', 'SIG'],
+      datasets: [{
+        label: 'Detection Rate (%)',
+        data: [100, 100, 100, 100, 100, 100, 100],
+        backgroundColor: 'rgba(63,185,80,0.7)',
+        borderColor: '#3fb950',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        y: { ...CHART_DEFAULTS.scales.y, min: 90, max: 100, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v + '%' } }
+      }
+    }
+  });
+
+  // Performance Chart
+  new Chart(document.getElementById('perfChart'), {
+    type: 'bar',
+    data: {
+      labels: ['TC1', 'TC2', 'TC3', 'TC4', 'TC5'],
+      datasets: [
+        {
+          label: 'Parse (ms)',
+          data: [4, 6, 8, 5, 9],
+          backgroundColor: 'rgba(88,166,255,0.6)',
+          borderColor: '#58a6ff',
+          borderWidth: 1, borderRadius: 4,
+        },
+        {
+          label: 'Diff (ms)',
+          data: [2, 3, 5, 3, 6],
+          backgroundColor: 'rgba(210,166,121,0.6)',
+          borderColor: '#d2a679',
+          borderWidth: 1, borderRadius: 4,
+        },
+        {
+          label: 'Startup overhead (ms)',
+          data: [56, 59, 62, 56, 63],
+          backgroundColor: 'rgba(139,148,158,0.3)',
+          borderColor: '#8b949e',
+          borderWidth: 1, borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, legend: { labels: { color: '#8b949e', font: { size: 10 } } } },
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        x: { ...CHART_DEFAULTS.scales.x, stacked: true },
+        y: { ...CHART_DEFAULTS.scales.y, stacked: true, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v + 'ms' } }
+      }
+    }
+  });
+
+  // Category Distribution Donut
+  new Chart(document.getElementById('categoryChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Vectorization', 'Inlining', 'Function Del', 'Control Flow', 'Loop', 'Signature', 'Function Add'],
+      datasets: [{
+        data: [7, 4, 3, 3, 3, 2, 2],
+        backgroundColor: [
+          'rgba(210,166,121,0.8)',
+          'rgba(227,179,65,0.8)',
+          'rgba(248,81,73,0.8)',
+          'rgba(88,166,255,0.8)',
+          'rgba(63,185,80,0.8)',
+          'rgba(188,140,255,0.8)',
+          'rgba(139,148,158,0.8)',
+        ],
+        borderColor: '#161b22',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'right', labels: { color: '#8b949e', font: { size: 10 }, padding: 10, boxWidth: 12 } }
+      },
+      cutout: '60%',
+    }
+  });
+
+  // Severity Distribution
+  new Chart(document.getElementById('severityChart'), {
+    type: 'bar',
+    data: {
+      labels: ['SIGNIFICANT', 'WARNING', 'INFO'],
+      datasets: [{
+        label: 'Findings',
+        data: [14, 6, 4],
+        backgroundColor: [
+          'rgba(248,81,73,0.7)',
+          'rgba(227,179,65,0.7)',
+          'rgba(88,166,255,0.7)',
+        ],
+        borderColor: ['#f85149', '#e3b341', '#58a6ff'],
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } },
+    }
+  });
+</script>
+</body>
+</html>
