@@ -1,0 +1,22 @@
+======================================================================
+  Semantic IR Diff Report
+======================================================================
+  Old: testcases/eval/eval_01/v1.ll
+  New: testcases/eval/eval_01/v2.ll
+----------------------------------------------------------------------
+  Functions: 0 added, 0 removed, 1 modified
+----------------------------------------------------------------------
+
+  Function: @compute_checksum
+    [LOOP] [SIGNIFICANT] @compute_checksum: Loop body REROLLED in block 'for.body': 24 → 9 instructions (~3x reduction)
+        Old block had 24 instructions (likely 3x unrolled)
+        New block has 9 instructions (canonical single-iteration body)
+    [CFG] [INFO] @compute_checksum: 1 new basic block(s) added
+        Added: for.end.loopexit
+
+----------------------------------------------------------------------
+  Change summary:
+    [CFG]        1 occurrence(s)
+    [LOOP]       1 occurrence(s)
+
+======================================================================

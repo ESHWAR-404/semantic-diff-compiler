@@ -1,0 +1,25 @@
+======================================================================
+  Semantic IR Diff Report
+======================================================================
+  Old: testcases/eval/eval_10/v1.ll
+  New: testcases/eval/eval_10/v2.ll
+----------------------------------------------------------------------
+  Functions: 0 added, 0 removed, 2 modified
+----------------------------------------------------------------------
+
+  Function: @prefix_sum_i32
+    [SIG] [SIGNIFICANT] @prefix_sum_i32: Parameter types changed
+        Old: ['i32*', 'i32']
+        New: ['i64*', 'i64']
+
+  Function: @reduce_max_i32
+    [SIG] [SIGNIFICANT] @reduce_max_i32: Return type changed: 'i32' → 'i64'
+    [SIG] [SIGNIFICANT] @reduce_max_i32: Parameter types changed
+        Old: ['i32*', 'i32']
+        New: ['i64*', 'i64']
+
+----------------------------------------------------------------------
+  Change summary:
+    [SIG]        3 occurrence(s)
+
+======================================================================

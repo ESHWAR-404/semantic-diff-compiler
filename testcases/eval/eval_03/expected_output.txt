@@ -1,0 +1,25 @@
+======================================================================
+  Semantic IR Diff Report
+======================================================================
+  Old: testcases/eval/eval_03/v1.ll
+  New: testcases/eval/eval_03/v2.ll
+----------------------------------------------------------------------
+  Functions: 0 added, 1 removed, 1 modified
+----------------------------------------------------------------------
+
+  Function: @fast_abs
+    [DEL] [WARNING] @fast_abs: Function @fast_abs removed from module
+        Possible: inlined into all call sites or dead code elimination
+
+  Function: @normalize_signal
+    [INLINE] [SIGNIFICANT] @normalize_signal: Call to @fast_abs reduced: 1 → 0 (callee removed — likely inlined)
+        Old version called @fast_abs 1 time(s)
+        New version calls it 0 time(s)
+        Possible causes: always_inline, function body merged, or dead-call elimination
+
+----------------------------------------------------------------------
+  Change summary:
+    [DEL]        1 occurrence(s)
+    [INLINE]     1 occurrence(s)
+
+======================================================================

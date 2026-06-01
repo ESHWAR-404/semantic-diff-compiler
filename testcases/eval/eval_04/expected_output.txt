@@ -1,0 +1,21 @@
+======================================================================
+  Semantic IR Diff Report
+======================================================================
+  Old: testcases/eval/eval_04/v1.ll
+  New: testcases/eval/eval_04/v2.ll
+----------------------------------------------------------------------
+  Functions: 0 added, 0 removed, 2 modified
+----------------------------------------------------------------------
+  No semantic changes detected.
+======================================================================
+
+NOTE: Dead store elimination (DSE) changes occur *within* basic blocks
+(instruction removal) rather than at the block-structure level. The tool's
+semantic classifiers operate at the block-count and call-site level.
+
+Use --show-block-diff to see the instruction-level changes:
+  @init_buffer: for.body block: -1 store instruction removed (dead store)
+  @compute_with_temp: entry block: -2 alloca/store instructions removed
+
+This is a documented limitation: a dedicated DEAD_STORE classifier that
+inspects InstructionDiff entries is planned for a future version.

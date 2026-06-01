@@ -1,0 +1,22 @@
+======================================================================
+  Semantic IR Diff Report
+======================================================================
+  Old: testcases/eval/eval_08/v1.ll
+  New: testcases/eval/eval_08/v2.ll
+----------------------------------------------------------------------
+  Functions: 1 added, 1 removed, 0 modified
+----------------------------------------------------------------------
+
+  Function: @update_particles_aos
+    [DEL] [WARNING] @update_particles_aos: Function @update_particles_aos removed from module
+        Possible: inlined into all call sites or dead code elimination
+
+  Function: @update_particles_soa
+    [NEW] [INFO] @update_particles_soa: New function @update_particles_soa added to module
+
+----------------------------------------------------------------------
+  Change summary:
+    [DEL]        1 occurrence(s)
+    [NEW]        1 occurrence(s)
+
+======================================================================
